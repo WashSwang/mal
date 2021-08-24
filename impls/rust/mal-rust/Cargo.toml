@@ -1,0 +1,18 @@
+[package]
+name = "mal-rust"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rustyline = "9.0.0"
+nom = "7"
+
+[[bin]]
+name = "step0_repl"
+path = "src/step0_repl.rs"
+
+[[bin]]
+name = "step1_read_print"
+path = "src/step1_read_print.rs"
