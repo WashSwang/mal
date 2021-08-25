@@ -6,21 +6,22 @@ use printer::print_str;
 use reader::read_str;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
+use std::rc::Rc;
 use types::MalType;
 
-fn read(input: &str) -> Option<MalType> {
+fn read(input: &str) -> Option<Rc<MalType>> {
     match read_str(input) {
         Ok((_, mal)) => Some(mal),
         _ => None,
     }
 }
 
-fn eval(input: MalType) -> MalType {
+fn eval(input: Rc<MalType>) -> Rc<MalType> {
     input
 }
 
-fn print(input: MalType) -> String {
-    print_str(&input, false)
+fn print(input: Rc<MalType>) -> String {
+    print_str(input, false)
 }
 
 fn rep(input: &str) {

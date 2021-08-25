@@ -1,2 +1,2 @@
 %:
-	make -C ./mal $%
+	make -C ./mal-rust $%

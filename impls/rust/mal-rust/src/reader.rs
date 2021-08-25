@@ -1,4 +1,4 @@
-use crate::types::MalType;
+use crate::types::{MalType, KV};
 use nom::{
     branch::alt,
     bytes::complete::{escaped_transform, tag, take_till1, take_while},
@@ -8,6 +8,7 @@ use nom::{
     sequence::{delimited, pair, preceded, terminated},
     IResult,
 };
+use std::rc::Rc;
 use std::str::FromStr;
 
 // space and comma
@@ -49,7 +50,7 @@ fn parse_str(input: &str) -> IResult<&str, String> {
     )(input)
 }
 
-fn parse_list(input: &str) -> IResult<&str, Vec<MalType>> {
+fn parse_list(input: &str) -> IResult<&str, Vec<Rc<MalType>>> {
     // unable to support statements like (()()) because the sep in separated_list should always consume sth
     // delimited(char('('), delimited(spc, separated_list0(spc1, parse_mal), spc), char(')'))(input)
     delimited(
@@ -59,7 +60,7 @@ fn parse_list(input: &str) -> IResult<&str, Vec<MalType>> {
     )(input)
 }
 
-fn parse_vec(input: &str) -> IResult<&str, Vec<MalType>> {
+fn parse_vec(input: &str) -> IResult<&str, Vec<Rc<MalType>>> {
     delimited(
         char('['),
         delimited(spc, many0(preceded(spc, parse_mal)), spc),
@@ -76,11 +77,11 @@ fn parse_keyword(input: &str) -> IResult<&str, &str> {
     preceded(char(':'), parse_symbol)(input)
 }
 
-fn parse_hash_map_kv(input: &str) -> IResult<&str, (MalType, MalType)> {
+fn parse_hash_map_kv(input: &str) -> IResult<&str, KV> {
     pair(terminated(parse_mal, spc), parse_mal)(input)
 }
 
-fn parse_hash_map(input: &str) -> IResult<&str, Vec<(MalType, MalType)>> {
+fn parse_hash_map(input: &str) -> IResult<&str, Vec<KV>> {
     delimited(
         char('{'),
         delimited(spc, many0(preceded(spc, parse_hash_map_kv)), spc),
@@ -88,7 +89,7 @@ fn parse_hash_map(input: &str) -> IResult<&str, Vec<(MalType, MalType)>> {
     )(input)
 }
 
-fn parse_quote(input: &str) -> IResult<&str, Vec<MalType>> {
+fn parse_quote(input: &str) -> IResult<&str, Vec<Rc<MalType>>> {
     alt((
         map(
             pair(
@@ -96,41 +97,53 @@ fn parse_quote(input: &str) -> IResult<&str, Vec<MalType>> {
                 parse_mal,
             ),
             |x| match x.0 {
-                "~@" => vec![MalType::Symbol(String::from("splice-unquote")), x.1],
-                "\'" => vec![MalType::Symbol(String::from("quote")), x.1],
-                "`" => vec![MalType::Symbol(String::from("quasiquote")), x.1],
-                "@" => vec![MalType::Symbol(String::from("deref")), x.1],
-                "~" => vec![MalType::Symbol(String::from("unquote")), x.1],
-                _ => vec![MalType::Nil],
+                "~@" => vec![
+                    Rc::new(MalType::Symbol(String::from("splice-unquote"))),
+                    x.1,
+                ],
+                "\'" => vec![Rc::new(MalType::Symbol(String::from("quote"))), x.1],
+                "`" => vec![Rc::new(MalType::Symbol(String::from("quasiquote"))), x.1],
+                "@" => vec![Rc::new(MalType::Symbol(String::from("deref"))), x.1],
+                "~" => vec![Rc::new(MalType::Symbol(String::from("unquote"))), x.1],
+                _ => vec![Rc::new(MalType::Nil)],
             },
         ),
         map(
             preceded(tag("^"), pair(parse_mal, preceded(spc, parse_mal))),
-            |x| vec![MalType::Symbol(String::from("with-meta")), x.1, x.0],
+            |x| {
+                vec![
+                    Rc::new(MalType::Symbol(String::from("with-meta"))),
+                    x.1,
+                    x.0,
+                ]
+            },
         ),
     ))(input)
 }
 
-fn parse_mal(input: &str) -> IResult<&str, MalType> {
-    alt((
-        map(parse_hash_map, MalType::HashMap),
-        map(parse_str, MalType::Str),
-        map(parse_vec, MalType::Vector),
-        map(parse_i32, MalType::Int),
-        map(parse_boolean, MalType::Bool),
-        map(parse_nil, |_| MalType::Nil),
-        map(parse_keyword, |s| MalType::Keyword(String::from(s))),
-        map(parse_list, MalType::List),
-        map(parse_quote, MalType::List),
-        map(parse_symbol, |s| MalType::Symbol(String::from(s))),
-    ))(input)
+fn parse_mal(input: &str) -> IResult<&str, Rc<MalType>> {
+    map(
+        alt((
+            map(parse_hash_map, MalType::HashMap),
+            map(parse_str, MalType::Str),
+            map(parse_vec, MalType::Vector),
+            map(parse_i32, MalType::Int),
+            map(parse_boolean, MalType::Bool),
+            map(parse_nil, |_| MalType::Nil),
+            map(parse_keyword, |s| MalType::Keyword(String::from(s))),
+            map(parse_list, MalType::List),
+            map(parse_quote, MalType::List),
+            map(parse_symbol, |s| MalType::Symbol(String::from(s))),
+        )),
+        Rc::new,
+    )(input)
 }
 
 fn parse_comment(input: &str) -> IResult<&str, Option<char>> {
     opt(terminated(char(';'), take_while(|_| true)))(input)
 }
 
-pub fn read_str(input: &str) -> IResult<&str, MalType> {
+pub fn read_str(input: &str) -> IResult<&str, Rc<MalType>> {
     terminated(
         terminated(delimited(spc, parse_mal, spc), parse_comment),
         eof,

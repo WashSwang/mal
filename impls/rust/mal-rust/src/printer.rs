@@ -1,11 +1,12 @@
-use crate::types::MalType;
+use crate::types::{MalType, KV};
+use std::rc::Rc;
 
-fn dump_hash_map(kvs: &[(MalType, MalType)]) -> String {
+fn dump_hash_map(kvs: &[KV]) -> String {
     let mut output = String::from("{");
     for (i, (k, v)) in kvs.iter().enumerate() {
-        output += &dump_mal(k);
+        output += &dump_mal(k.clone());
         output.push(' ');
-        output += &dump_mal(v);
+        output += &dump_mal(v.clone());
         if i != kvs.len() - 1 {
             output.push(' ');
         }
@@ -28,10 +29,10 @@ fn dump_str(string: &str) -> String {
     output
 }
 
-fn dump_vec(items: &[MalType]) -> String {
+fn dump_vec(items: &[Rc<MalType>]) -> String {
     let mut output = String::from('[');
     for (i, item) in items.iter().enumerate() {
-        output += &dump_mal(item);
+        output += &dump_mal(item.clone());
         if i != items.len() - 1 {
             output.push(' ');
         }
@@ -52,10 +53,10 @@ fn dump_keyword(keyword: &str) -> String {
     format!(":{}", keyword)
 }
 
-fn dump_list(items: &[MalType]) -> String {
+fn dump_list(items: &[Rc<MalType>]) -> String {
     let mut output = String::from('(');
     for (i, item) in items.iter().enumerate() {
-        output += &dump_mal(item);
+        output += &dump_mal(item.clone());
         if i != items.len() - 1 {
             output.push(' ');
         }
@@ -72,8 +73,8 @@ fn dump_nil() -> String {
     String::from("nil")
 }
 
-fn dump_mal_debug(mal: &MalType) -> String {
-    match mal {
+fn dump_mal_debug(mal: Rc<MalType>) -> String {
+    match &*mal {
         MalType::HashMap(kvs) => String::from("Hash:") + &dump_hash_map(kvs),
         MalType::Str(string) => String::from("Str:") + &dump_str(string),
         MalType::Vector(items) => String::from("Vec:") + &dump_vec(items),
@@ -83,11 +84,12 @@ fn dump_mal_debug(mal: &MalType) -> String {
         MalType::Keyword(keyword) => String::from("Key:") + &dump_keyword(keyword),
         MalType::List(items) => String::from("List:") + &dump_list(items),
         MalType::Symbol(symbol) => String::from("Sym:") + &dump_symbol(symbol),
+        _ => String::from(""),
     }
 }
 
-fn dump_mal(mal: &MalType) -> String {
-    match mal {
+fn dump_mal(mal: Rc<MalType>) -> String {
+    match &*mal {
         MalType::HashMap(kvs) => dump_hash_map(kvs),
         MalType::Str(string) => dump_str(string),
         MalType::Vector(items) => dump_vec(items),
@@ -97,10 +99,11 @@ fn dump_mal(mal: &MalType) -> String {
         MalType::Keyword(keyword) => dump_keyword(keyword),
         MalType::List(items) => dump_list(items),
         MalType::Symbol(symbol) => dump_symbol(symbol),
+        _ => String::from(""),
     }
 }
 
-pub fn print_str(mal: &MalType, debug: bool) -> String {
+pub fn print_str(mal: Rc<MalType>, debug: bool) -> String {
     if debug {
         dump_mal_debug(mal)
     } else {
