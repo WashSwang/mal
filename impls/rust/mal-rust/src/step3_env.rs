@@ -8,7 +8,7 @@ use printer::print_str;
 use reader::read_str;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 use types::MalType;
 
 fn read(input: &str) -> Option<Rc<MalType>> {
@@ -18,10 +18,10 @@ fn read(input: &str) -> Option<Rc<MalType>> {
     }
 }
 
-fn eval_ast(ast: Rc<MalType>, env: &mut Env) -> Option<Rc<MalType>> {
+fn eval_ast(ast: Rc<MalType>, env: Rc<RefCell<Env>>) -> Option<Rc<MalType>> {
     match &*ast {
         MalType::Symbol(symbol) => {
-            let mal = env.get(symbol);
+            let mal = env.borrow_mut().get(symbol);
             if mal.is_none() {
                 println!("{} not found", symbol);
             }
@@ -30,7 +30,7 @@ fn eval_ast(ast: Rc<MalType>, env: &mut Env) -> Option<Rc<MalType>> {
         MalType::List(list) => {
             let mut eval_list = vec![];
             for item in list.iter() {
-                match eval(item.clone(), env) {
+                match eval(item.clone(), env.clone()) {
                     Some(mal) => eval_list.push(mal),
                     _ => return None,
                 }
@@ -40,7 +40,7 @@ fn eval_ast(ast: Rc<MalType>, env: &mut Env) -> Option<Rc<MalType>> {
         MalType::Vector(vec) => {
             let mut eval_vec = vec![];
             for item in vec.iter() {
-                match eval(item.clone(), env) {
+                match eval(item.clone(), env.clone()) {
                     Some(mal) => eval_vec.push(mal),
                     _ => return None,
                 }
@@ -50,7 +50,7 @@ fn eval_ast(ast: Rc<MalType>, env: &mut Env) -> Option<Rc<MalType>> {
         MalType::HashMap(kvs) => {
             let mut eval_map = vec![];
             for (k, v) in kvs.iter() {
-                match eval(v.clone(), env) {
+                match eval(v.clone(), env.clone()) {
                     Some(mal) => eval_map.push((k.clone(), mal)),
                     _ => return None,
                 }
@@ -61,7 +61,7 @@ fn eval_ast(ast: Rc<MalType>, env: &mut Env) -> Option<Rc<MalType>> {
     }
 }
 
-fn eval(ast: Rc<MalType>, env: &mut Env) -> Option<Rc<MalType>> {
+fn eval(ast: Rc<MalType>, env: Rc<RefCell<Env>>) -> Option<Rc<MalType>> {
     match &*ast {
         MalType::List(list) => {
             if list.is_empty() {
@@ -76,14 +76,14 @@ fn eval(ast: Rc<MalType>, env: &mut Env) -> Option<Rc<MalType>> {
                     }
                     match &*list[1] {
                         MalType::Symbol(bind) => {
-                            let value = eval(list[2].clone(), env);
+                            let value = eval(list[2].clone(), env.clone());
                             if let Some(mal) = &value {
-                                env.set(bind, mal.clone())
+                                env.borrow_mut().set(bind, mal.clone())
                             }
                             return value;
                         }
                         _ => {
-                            println!("{} is not a symbol", print_str(list[1].clone(), true));
+                            println!("{} is not a symbol", print_str(list[1].clone(), true, true));
                             return None;
                         }
                     }
@@ -99,14 +99,14 @@ fn eval(ast: Rc<MalType>, env: &mut Env) -> Option<Rc<MalType>> {
                             if bind_list.len() % 2 != 0 {
                                 println!("Wrong amount of arguments for bind of let*");
                             }
-                            let mut new_env = Env::new(env);
+                            let new_env = Rc::new(RefCell::new(Env::new(env)));
                             for i in 0..bind_list.len() / 2 {
                                 match &*bind_list[i * 2] {
                                     MalType::Symbol(bind) => {
                                         let value =
-                                            eval(bind_list[i * 2 + 1].clone(), &mut new_env);
+                                            eval(bind_list[i * 2 + 1].clone(), new_env.clone());
                                         if let Some(mal) = value {
-                                            new_env.set(bind, mal);
+                                            new_env.borrow_mut().set(bind, mal);
                                         } else {
                                             return value;
                                         }
@@ -114,13 +114,13 @@ fn eval(ast: Rc<MalType>, env: &mut Env) -> Option<Rc<MalType>> {
                                     _ => {
                                         println!(
                                             "{} is not a symbol",
-                                            print_str(bind_list[i * 2].clone(), true)
+                                            print_str(bind_list[i * 2].clone(), true, true)
                                         );
                                         return None;
                                     }
                                 }
                             }
-                            return eval(list[2].clone(), &mut new_env);
+                            return eval(list[2].clone(), new_env);
                         }
                         _ => {
                             println!("Wrong bind format");
@@ -148,12 +148,12 @@ fn eval(ast: Rc<MalType>, env: &mut Env) -> Option<Rc<MalType>> {
 
 fn print(input: Option<Rc<MalType>>) -> String {
     match input {
-        Some(mal) => print_str(mal, false),
+        Some(mal) => print_str(mal, false, true),
         _ => String::from("Error"),
     }
 }
 
-fn rep(input: &str, env: &mut Env) {
+fn rep(input: &str, env: Rc<RefCell<Env>>) {
     match read(input) {
         Some(ast) => println!("{}", print(eval(ast, env))),
         _ => println!("EOF"),
@@ -166,13 +166,13 @@ fn main() {
         println!("No previous history.");
     }
 
-    let mut env = Env::new_root();
+    let mut env = Rc::new(RefCell::new(Env::new_root()));
     loop {
         let readline = rl.readline("user> ");
         match readline {
             Ok(input) => {
                 rl.add_history_entry(input.as_str());
-                rep(input.as_str(), &mut env);
+                rep(input.as_str(), env.clone());
             }
             Err(ReadlineError::Eof) => break,
             Err(err) => {

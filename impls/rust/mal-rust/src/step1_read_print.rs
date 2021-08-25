@@ -21,7 +21,7 @@ fn eval(input: Rc<MalType>) -> Rc<MalType> {
 }
 
 fn print(input: Rc<MalType>) -> String {
-    print_str(input, false)
+    print_str(input, false, true)
 }
 
 fn rep(input: &str) {

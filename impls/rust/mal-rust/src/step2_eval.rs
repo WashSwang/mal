@@ -85,7 +85,7 @@ fn eval(ast: Rc<MalType>, env: &mut Env) -> Option<Rc<MalType>> {
 
 fn print(input: Option<Rc<MalType>>) -> String {
     match input {
-        Some(mal) => print_str(mal, false),
+        Some(mal) => print_str(mal, false, true),
         _ => String::from("Error"),
     }
 }

@@ -1,33 +1,40 @@
 use crate::types::MalType;
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 
-pub struct Env<'a> {
+pub struct Env {
     pub map: HashMap<String, Rc<MalType>>,
-    pub outer: Option<&'a Env<'a>>,
+    pub outer: Option<Rc<RefCell<Env>>>,
 }
 
-impl<'a> Env<'a> {
+impl Env {
     pub fn new_root() -> Self {
-        let mut env = Env {
+        Self {
             map: HashMap::new(),
             outer: None,
-        };
-        env.load_builtin();
-        env
+        }
+        //env.load_builtin();
     }
 
-    pub fn new(outer: &'a Env<'a>) -> Self {
+    pub fn new(outer: Rc<RefCell<Env>>) -> Self {
         Self {
             map: HashMap::new(),
             outer: Some(outer),
         }
     }
 
+    pub fn new_bind(outer: Rc<RefCell<Env>>, binds: &[&str], exprs: &[Rc<MalType>]) -> Self {
+        let mut env = Env::new(outer);
+        for (bind, expr) in binds.iter().zip(exprs.iter()) {
+            env.map.insert(String::from(*bind), expr.clone());
+        }
+        env
+    }
+
     pub fn get(&self, symbol: &str) -> Option<Rc<MalType>> {
         let result = self.map.get(symbol).cloned();
         if result.is_none() {
-            self.outer?.get(symbol)
+            self.outer.as_ref()?.borrow().get(symbol)
         } else {
             result
         }
@@ -35,72 +42,5 @@ impl<'a> Env<'a> {
 
     pub fn set(&mut self, symbol: &str, mal: Rc<MalType>) {
         self.map.insert(String::from(symbol), mal);
-    }
-
-    pub fn load_builtin(&mut self) {
-        self.load_add();
-        self.load_sub();
-        self.load_mul();
-        self.load_div();
-    }
-
-    fn load_add(&mut self) {
-        self.map.insert(
-            String::from("+"),
-            Rc::new(MalType::BuiltinFunc(|args| {
-                if args.len() != 2 {
-                    return None;
-                }
-                match (&*args[0], &*args[1]) {
-                    (MalType::Int(a), MalType::Int(b)) => Some(Rc::new(MalType::Int(a + b))),
-                    _ => None,
-                }
-            })),
-        );
-    }
-
-    fn load_sub(&mut self) {
-        self.map.insert(
-            String::from("-"),
-            Rc::new(MalType::BuiltinFunc(|args| {
-                if args.len() != 2 {
-                    return None;
-                }
-                match (&*args[0], &*args[1]) {
-                    (MalType::Int(a), MalType::Int(b)) => Some(Rc::new(MalType::Int(a - b))),
-                    _ => None,
-                }
-            })),
-        );
-    }
-
-    fn load_mul(&mut self) {
-        self.map.insert(
-            String::from("*"),
-            Rc::new(MalType::BuiltinFunc(|args| {
-                if args.len() != 2 {
-                    return None;
-                }
-                match (&*args[0], &*args[1]) {
-                    (MalType::Int(a), MalType::Int(b)) => Some(Rc::new(MalType::Int(a * b))),
-                    _ => None,
-                }
-            })),
-        );
-    }
-
-    fn load_div(&mut self) {
-        self.map.insert(
-            String::from("/"),
-            Rc::new(MalType::BuiltinFunc(|args| {
-                if args.len() != 2 {
-                    return None;
-                }
-                match (&*args[0], &*args[1]) {
-                    (MalType::Int(a), MalType::Int(b)) => Some(Rc::new(MalType::Int(a / b))),
-                    _ => None,
-                }
-            })),
-        );
     }
 }
