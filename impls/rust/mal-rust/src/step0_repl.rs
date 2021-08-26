@@ -1,3 +1,9 @@
+mod core;
+mod env;
+mod printer;
+mod reader;
+mod types;
+
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 

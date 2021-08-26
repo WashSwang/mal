@@ -1,7 +1,7 @@
 use crate::types::{MalType, KV};
 use nom::{
     branch::alt,
-    bytes::complete::{escaped_transform, tag, take_till1, take_while},
+    bytes::complete::{escaped_transform, tag, take_till1, take_while1},
     character::complete::{char, digit1, none_of},
     combinator::{eof, map, map_res, opt, recognize, success, value},
     multi::many0,
@@ -12,9 +12,12 @@ use std::rc::Rc;
 use std::str::FromStr;
 
 // space and comma
-fn spc(input: &str) -> IResult<&str, &str> {
-    let chars = " \t,";
-    take_while(move |c| chars.contains(c))(input)
+fn spc(input: &str) -> IResult<&str, Vec<&str>> {
+    let chars = " \t\n,";
+    many0(alt((
+        take_while1(move |c| chars.contains(c)),
+        preceded(char(';'), take_while1(|c| c != '\n')),
+    )))(input)
 }
 
 fn parse_boolean(input: &str) -> IResult<&str, bool> {
@@ -69,7 +72,7 @@ fn parse_vec(input: &str) -> IResult<&str, Vec<Rc<MalType>>> {
 }
 
 fn parse_symbol(input: &str) -> IResult<&str, &str> {
-    let chars = "{[()]} \t,;:\"";
+    let chars = "{[()]} \t,;:\"\n";
     take_till1(move |c| chars.contains(c))(input)
 }
 
@@ -139,13 +142,10 @@ fn parse_mal(input: &str) -> IResult<&str, Rc<MalType>> {
     )(input)
 }
 
-fn parse_comment(input: &str) -> IResult<&str, Option<char>> {
-    opt(terminated(char(';'), take_while(|_| true)))(input)
-}
+// fn parse_comment(input: &str) -> IResult<&str, Option<char>> {
+//     opt(terminated(char(';'), take_while(|_| true)))(input)
+// }
 
 pub fn read_str(input: &str) -> IResult<&str, Rc<MalType>> {
-    terminated(
-        terminated(delimited(spc, parse_mal, spc), parse_comment),
-        eof,
-    )(input)
+    terminated(delimited(spc, parse_mal, spc), eof)(input)
 }

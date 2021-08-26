@@ -1,2 +1,2 @@
 #!/bin/bash
-exec $(dirname $0)/mal-rust/${STEP:-step1_read_print} "${@}"
+exec $(dirname $0)/${STEP:-step1_read_print} "${@}"

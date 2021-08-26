@@ -1,7 +1,27 @@
+use crate::env::Env;
+use std::cell::RefCell;
 use std::rc::Rc;
 
 pub type KV = (Rc<MalType>, Rc<MalType>);
-pub type Closure = dyn Fn(&[Rc<MalType>]) -> Option<Rc<MalType>>;
+
+pub type FuncType = dyn Fn(&[Rc<MalType>]) -> Option<Rc<MalType>>;
+pub struct ClosureType {
+    pub ast: Rc<MalType>,
+    pub params: Vec<String>,
+    pub env: Rc<RefCell<Env>>,
+    pub func: Rc<FuncType>,
+}
+
+impl Clone for ClosureType {
+    fn clone(&self) -> Self {
+        Self {
+            ast: self.ast.clone(),
+            params: self.params.clone(),
+            env: self.env.clone(),
+            func: self.func.clone(),
+        }
+    }
+}
 
 #[derive(Clone)]
 pub enum MalType {
@@ -13,8 +33,9 @@ pub enum MalType {
     Str(String),
     Vector(Vec<Rc<MalType>>),
     Bool(bool),
-    BuiltinFunc(fn(&[Rc<MalType>]) -> Option<Rc<MalType>>),
-    Func(Rc<Closure>),
+    BuiltinFunc(Rc<FuncType>),
+    Atom(RefCell<Rc<MalType>>),
+    Func(ClosureType),
     Nil,
 }
 

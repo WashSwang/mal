@@ -1,4 +1,5 @@
 use crate::types::{MalType, KV};
+use std::cell::RefCell;
 use std::rc::Rc;
 
 fn dump_hash_map(kvs: &[KV], print_readably: bool) -> String {
@@ -74,6 +75,13 @@ fn dump_symbol(symbol: &str) -> String {
     String::from(symbol)
 }
 
+fn dump_atom(value: &RefCell<Rc<MalType>>, print_readably: bool) -> String {
+    format!(
+        "(atom {})",
+        dump_mal(value.borrow().clone(), print_readably)
+    )
+}
+
 fn dump_mal_debug(mal: Rc<MalType>, print_readably: bool) -> String {
     match &*mal {
         MalType::HashMap(kvs) => String::from("Hash:") + &dump_hash_map(kvs, print_readably),
@@ -85,6 +93,7 @@ fn dump_mal_debug(mal: Rc<MalType>, print_readably: bool) -> String {
         MalType::Keyword(keyword) => String::from("Key:") + &dump_keyword(keyword),
         MalType::List(items) => String::from("List:") + &dump_list(items, print_readably),
         MalType::Symbol(symbol) => String::from("Sym:") + &dump_symbol(symbol),
+        MalType::Atom(value) => dump_atom(value, print_readably),
         MalType::Func(_) | MalType::BuiltinFunc(_) => String::from("#<function>"),
     }
 }
@@ -100,6 +109,7 @@ fn dump_mal(mal: Rc<MalType>, print_readably: bool) -> String {
         MalType::Keyword(keyword) => dump_keyword(keyword),
         MalType::List(items) => dump_list(items, print_readably),
         MalType::Symbol(symbol) => dump_symbol(symbol),
+        MalType::Atom(value) => dump_atom(value, print_readably),
         MalType::Func(_) | MalType::BuiltinFunc(_) => String::from("#<function>"),
     }
 }

@@ -88,7 +88,7 @@ fn eval_def(ast: Rc<MalType>, env: Rc<RefCell<Env>>) -> Option<Rc<MalType>> {
     }
 }
 
-fn eval_let(ast: Rc<MalType>, env: Rc<RefCell<Env>>) -> Option<Rc<MalType>> {
+fn eval_let(ast: Rc<MalType>, env: Rc<RefCell<Env>>) -> Option<(Rc<MalType>, Rc<RefCell<Env>>)> {
     if let MalType::List(list) = &*ast {
         if list.len() != 3 {
             println!("Wrong amount of arguments for let*");
@@ -107,7 +107,7 @@ fn eval_let(ast: Rc<MalType>, env: Rc<RefCell<Env>>) -> Option<Rc<MalType>> {
                             if let Some(mal) = value {
                                 new_env.borrow_mut().set(bind, mal);
                             } else {
-                                return value;
+                                return None;
                             }
                         }
                         _ => {
@@ -119,7 +119,7 @@ fn eval_let(ast: Rc<MalType>, env: Rc<RefCell<Env>>) -> Option<Rc<MalType>> {
                         }
                     }
                 }
-                eval(list[2].clone(), new_env)
+                Some((list[2].clone(), new_env))
             }
             _ => {
                 println!("Wrong bind format");
@@ -191,19 +191,19 @@ fn eval_if(ast: Rc<MalType>, env: Rc<RefCell<Env>>) -> Option<Rc<MalType>> {
             println!("Wrong amount of arguments for if");
             return None;
         }
-        let cond = eval(list[1].clone(), env.clone());
+        let cond = eval(list[1].clone(), env);
         if let Some(value) = cond {
             match &*value {
                 MalType::Bool(false) | MalType::Nil => {
                     if list.len() >= 4 {
-                        eval(list[3].clone(), env)
+                        Some(list[3].clone())
                     } else {
                         Some(Rc::new(MalType::Nil))
                     }
                 }
                 _ => {
                     if list.len() >= 3 {
-                        eval(list[2].clone(), env)
+                        Some(list[2].clone())
                     } else {
                         Some(Rc::new(MalType::Nil))
                     }
@@ -223,55 +223,94 @@ fn eval_do(ast: Rc<MalType>, env: Rc<RefCell<Env>>) -> Option<Rc<MalType>> {
             println!("Wrong amount of arguments for do");
             return None;
         }
-        let mut result = None;
-        for mal in list[1..].iter() {
-            result = eval(mal.clone(), env.clone());
+        let mut parameters = vec![];
+        for parameter in list.iter().take(list.len() - 1).skip(1) {
+            parameters.push(parameter.clone());
         }
-        result
+        eval_ast(Rc::new(MalType::List(parameters)), env);
+        Some(list.last().unwrap().clone())
     } else {
         panic!()
     }
 }
 
 fn eval(ast: Rc<MalType>, env: Rc<RefCell<Env>>) -> Option<Rc<MalType>> {
-    match &*ast {
-        MalType::List(list) => {
-            if list.is_empty() {
-                return Some(ast);
-            }
+    let mut ast = ast;
+    let mut env = env;
+    loop {
+        match &*ast {
+            MalType::List(list) => {
+                if list.is_empty() {
+                    return Some(ast);
+                }
 
-            if let MalType::Symbol(symbol) = &*list[0] {
-                if symbol == "def!" {
-                    return eval_def(ast, env);
+                if let MalType::Symbol(symbol) = &*list[0] {
+                    if symbol == "def!" {
+                        return eval_def(ast, env);
+                    }
+                    if symbol == "let*" {
+                        // Tail Call Optimization
+                        let (new_ast, new_env) = eval_let(ast, env)?;
+                        ast = new_ast;
+                        env = new_env;
+                        continue;
+                    }
+                    if symbol == "fn*" {
+                        return eval_fn(ast, env);
+                    }
+                    if symbol == "if" {
+                        ast = eval_if(ast, env.clone())?;
+                        continue;
+                    }
+                    if symbol == "do" {
+                        // Tail Call Optimization
+                        ast = eval_do(ast, env.clone())?;
+                        continue;
+                    }
                 }
-                if symbol == "let*" {
-                    return eval_let(ast, env);
-                }
-                if symbol == "fn*" {
-                    return eval_fn(ast, env);
-                }
-                if symbol == "if" {
-                    return eval_if(ast, env);
-                }
-                if symbol == "do" {
-                    return eval_do(ast, env);
-                }
-            }
 
-            let res = eval_ast(ast, env);
-            match res {
-                Some(mal) => match &*mal {
-                    MalType::List(list) => match &*list[0] {
-                        MalType::BuiltinFunc(func) => func(&list[1..]),
-                        MalType::Func(closure) => (closure.func)(&list[1..]),
-                        _ => Some(mal.clone()),
+                let res = eval_ast(ast, env);
+                return match res {
+                    Some(mal) => match &*mal {
+                        MalType::List(list) => match &*list[0] {
+                            MalType::BuiltinFunc(func) => func(&list[1..]),
+                            MalType::Func(closure) => {
+                                let mut binds = vec![];
+                                let mut exprs = vec![];
+                                for i in 0..closure.params.len() {
+                                    if closure.params[i] == "&" {
+                                        if i + 1 < closure.params.len() {
+                                            binds.push(closure.params[i + 1].as_str());
+                                            let mut rest = vec![];
+                                            for arg in list.iter().skip(i + 1) {
+                                                rest.push(arg.clone());
+                                            }
+                                            exprs.push(Rc::new(MalType::List(rest)));
+                                        }
+                                        break;
+                                    } else {
+                                        binds.push(closure.params[i].as_str());
+                                        exprs.push(list[i + 1].clone());
+                                    }
+                                }
+                                let new_env = Rc::new(RefCell::new(Env::new_bind(
+                                    closure.env.clone(),
+                                    &binds,
+                                    &exprs,
+                                )));
+                                env = new_env;
+                                ast = closure.ast.clone();
+                                continue;
+                            }
+                            _ => Some(mal.clone()),
+                        },
+                        _ => panic!(),
                     },
-                    _ => panic!(),
-                },
-                _ => None,
+                    _ => None,
+                };
             }
+            _ => return eval_ast(ast, env),
         }
-        _ => eval_ast(ast, env),
     }
 }
 
