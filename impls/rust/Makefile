@@ -1,3 +1,3 @@
-%: ./mal-rust/%
-	make -C ./mal-rust $*
-	cp ./mal-rust/$* ./$* 
+%: ./mal-rust/$@
+	make -C ./mal-rust $@
+	cp ./mal-rust/$@ ./$@ 

@@ -355,6 +355,49 @@ impl NameSpace {
                 }
             })),
         ));
+
+        builtin.push((
+            "cons",
+            MalType::BuiltinFunc(Rc::new(|args| {
+                if args.len() < 2 {
+                    Some(Rc::new(MalType::Nil))
+                } else if let MalType::List(list) | MalType::Vector(list) = &*args[1] {
+                    let mut result = list.clone();
+                    result.insert(0, args[0].clone());
+                    Some(Rc::new(MalType::List(result)))
+                } else {
+                    Some(Rc::new(MalType::Int(0)))
+                }
+            })),
+        ));
+
+        builtin.push((
+            "concat",
+            MalType::BuiltinFunc(Rc::new(|args| {
+                let mut result = vec![];
+                for arg in args {
+                    if let MalType::List(list) | MalType::Vector(list) = &**arg {
+                        for item in list {
+                            result.push(item.clone());
+                        }
+                    }
+                }
+                Some(Rc::new(MalType::List(result)))
+            })),
+        ));
+
+        builtin.push((
+            "vec",
+            MalType::BuiltinFunc(Rc::new(|args| {
+                if args.is_empty() {
+                    Some(Rc::new(MalType::Nil))
+                } else if let MalType::List(list) | MalType::Vector(list) = &*args[0] {
+                    Some(Rc::new(MalType::Vector(list.clone())))
+                } else {
+                    Some(Rc::new(MalType::Nil))
+                }
+            })),
+        ));
         Self { builtin }
     }
 }

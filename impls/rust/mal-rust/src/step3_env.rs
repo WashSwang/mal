@@ -167,7 +167,7 @@ fn main() {
         println!("No previous history.");
     }
 
-    let mut env = Rc::new(RefCell::new(Env::new_root()));
+    let env = Rc::new(RefCell::new(Env::new_root()));
     loop {
         let readline = rl.readline("user> ");
         match readline {
